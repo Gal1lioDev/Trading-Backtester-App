@@ -1,6 +1,6 @@
 import io
 import json
-from typing import Annotated, Any, Dict
+from typing import Annotated, Any, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -11,6 +11,21 @@ from pydantic import BaseModel, Field
 # ----------------------------------------------------------------------
 # 1. Pydantic Models for Input and Output
 # ----------------------------------------------------------------------
+
+class TradeLog(BaseModel):
+    """Defines the structure for individual trade entries."""
+    date: str = Field(..., description="Date of the trade")
+    type: str = Field(..., description="Trade type: BUY or SELL")
+    price: float = Field(..., description="Trade price")
+    pnl: float = Field(..., alias="P&L", description="Profit/Loss for the trade (0 for BUY)")
+    cumulative_pnl: float = Field(..., alias="Cumulative P&L", description="Cumulative P&L up to this trade")
+
+
+class EquityPoint(BaseModel):
+    """Defines the structure for a single point on the equity curve graph."""
+    date: str = Field(..., description="Date of the equity point")
+    value: float = Field(..., description="Equity value at this point")
+
 
 class BacktestResult(BaseModel):
     """Defines the structure for the backtesting output (JSON response)."""
@@ -25,6 +40,8 @@ class BacktestResult(BaseModel):
     no_of_trades: int = Field(..., alias="No. of trades", description="Total number of executed trades.")
     win_rate_percent: float = Field(..., alias="Win Rate(%)", description="Percentage of trades that were profitable.")
     strategy: str = Field(..., description="A summary of the strategy used.")
+    trade_log: List[TradeLog] = Field(..., description="Detailed log of all trades executed.")
+    equity_curve: List[EquityPoint] = Field(..., description="Array of equity curve points for graphing.")
 
 
 # ----------------------------------------------------------------------
@@ -133,7 +150,95 @@ def execute_strategy(
 
     return df
 
-def calculate_metrics(df: pd.DataFrame, initial_capital: float = 100000) -> Dict[str, Any]:
+def generate_trade_log(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    """
+    Generates a detailed trade log with BUY/SELL entries, prices, P&L, and cumulative P&L.
+    """
+    df['Position'] = df['Signal'].apply(lambda x: 1 if x > 0 else 0)
+    
+    # Identify trade events
+    entries = df[df['Position'].diff() == 1].index
+    exits = df[df['Position'].diff() == -1].index
+    
+    trade_log = []
+    cumulative_pnl = 0.0
+    
+    # Adjust if last trade is still open
+    if len(entries) > len(exits):
+        entries = entries[:-1]
+    
+    if len(entries) == len(exits) and len(entries) > 0:
+        for entry_date, exit_date in zip(entries, exits):
+            entry_price = df.loc[entry_date, 'Close']
+            exit_price = df.loc[exit_date, 'Close']
+            pnl = exit_price - entry_price
+            
+            # BUY entry
+            trade_log.append({
+                'date': entry_date.strftime('%Y-%m-%d'),
+                'type': 'BUY',
+                'price': round(entry_price, 2),
+                'P&L': 0.0,
+                'Cumulative P&L': round(cumulative_pnl, 2)
+            })
+            
+            # SELL exit
+            cumulative_pnl += pnl
+            trade_log.append({
+                'date': exit_date.strftime('%Y-%m-%d'),
+                'type': 'SELL',
+                'price': round(exit_price, 2),
+                'P&L': round(pnl, 2),
+                'Cumulative P&L': round(cumulative_pnl, 2)
+            })
+    
+    return trade_log
+
+def generate_equity_curve(df: pd.DataFrame, initial_capital: float = 100000, max_points: int = 100) -> List[Dict[str, Any]]:
+    """
+    Generates equity curve points for graphing the strategy performance over time.
+    Intelligently samples the data to return a maximum of max_points for efficient plotting.
+    """
+    total_rows = len(df)
+    
+    # If data is already small enough, return all points
+    if total_rows <= max_points:
+        equity_points = []
+        for index, row in df.iterrows():
+            equity_value = initial_capital * row['Equity_Curve']
+            equity_points.append({
+                'date': index.strftime('%Y-%m-%d'),
+                'value': round(equity_value, 2)
+            })
+        return equity_points
+    
+    # Calculate sampling interval to get approximately max_points
+    sample_interval = total_rows // max_points
+    
+    equity_points = []
+    df_reset = df.reset_index()
+    
+    # Sample at regular intervals
+    for i in range(0, total_rows, sample_interval):
+        row = df_reset.iloc[i]
+        equity_value = initial_capital * row['Equity_Curve']
+        equity_points.append({
+            'date': row['Date'].strftime('%Y-%m-%d'),
+            'value': round(equity_value, 2)
+        })
+    
+    # Always include the last point to show final equity
+    if equity_points[-1]['date'] != df.index[-1].strftime('%Y-%m-%d'):
+        last_row = df.iloc[-1]
+        equity_value = initial_capital * last_row['Equity_Curve']
+        equity_points.append({
+            'date': df.index[-1].strftime('%Y-%m-%d'),
+            'value': round(equity_value, 2)
+        })
+    
+    return equity_points
+
+def calculate_metrics(df: pd.DataFrame, initial_capital: float = 100000, max_equity_points: int = 100) -> Dict[str, Any]:
     """
     Calculates the required performance metrics from the strategy returns.
     Includes a check for an empty DataFrame to prevent NaTType errors.
@@ -152,7 +257,9 @@ def calculate_metrics(df: pd.DataFrame, initial_capital: float = 100000) -> Dict
             'Avg. Trade Duration': 'N/A', 
             'No. of trades': 0, 
             'Win Rate(%)': 0.0, 
-            'strategy': 'No Trades Executed - Insufficient Data or Signal'
+            'strategy': 'No Trades Executed - Insufficient Data or Signal',
+            'trade_log': [],
+            'equity_curve': []
         }
 
 
@@ -217,6 +324,11 @@ def calculate_metrics(df: pd.DataFrame, initial_capital: float = 100000) -> Dict
     # Get strategy summary from DataFrame attributes
     strategy_summary = df.attrs.get('strategy_summary', 'Crossover (Default)')
 
+    # 4. Generate Trade Log
+    trade_log = generate_trade_log(df)
+
+    # 5. Generate Equity Curve Points
+    equity_curve = generate_equity_curve(df, initial_capital, max_equity_points)
 
     return {
         'start_time': start_time,
@@ -229,7 +341,9 @@ def calculate_metrics(df: pd.DataFrame, initial_capital: float = 100000) -> Dict
         'Avg. Trade Duration': avg_trade_duration,
         'No. of trades': no_of_trades,
         'Win Rate(%)': round(win_rate_percent, 2),
-        'strategy': strategy_summary
+        'strategy': strategy_summary,
+        'trade_log': trade_log,
+        'equity_curve': equity_curve
     }
 
 # ----------------------------------------------------------------------
@@ -253,10 +367,12 @@ async def run_strategy_backtest(
     macd_fast_period: Annotated[int, Form(description="MACD fast EMA (e.g., 12)")] = 12,
     macd_slow_period: Annotated[int, Form(description="MACD slow EMA (e.g., 26)")] = 26,
     macd_signal_period: Annotated[int, Form(description="MACD signal line EMA (e.g., 9)")] = 9,
+    initial_capital: Annotated[float, Form(description="Initial investment capital (e.g., 100000)")] = 100000,
+    max_equity_points: Annotated[int, Form(description="Maximum number of equity curve points to return (e.g., 100)")] = 100,
 ):
     """
     Receives CSV data and strategy conditions, executes the backtest, and returns
-    key performance metrics in JSON format.
+    key performance metrics in JSON format with detailed trade log and equity curve points.
     """
     try:
         # Read the uploaded CSV file content
@@ -287,8 +403,8 @@ async def run_strategy_backtest(
             macd_signal_period
         )
 
-        # 2. Calculate final metrics
-        metrics = calculate_metrics(df_results)
+        # 2. Calculate final metrics (including trade log and equity curve)
+        metrics = calculate_metrics(df_results, initial_capital, max_equity_points)
 
         # 3. Package results for response
         return BacktestResult(**metrics)
