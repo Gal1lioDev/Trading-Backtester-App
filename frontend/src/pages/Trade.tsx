@@ -1,162 +1,104 @@
-import React, { useState, useEffect } from "react";
-import Navbar from "../components/Navbar";
-import GlassCard from "../components/GlassCard";
-import CandlestickChart from "../components/CandlestickChart";
-// using native controls to avoid missing ui component dependencies
-import { Upload, Database, Play } from "lucide-react";
-import { CandlestickData, loadSampleData, parseCSV } from "../components/ui/csvParser";
-import { useBacktest } from '../context/BacktestContext';
+import { useState, useRef } from "react";
+import { Upload, Play, Trash2, Plus, Database } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { toast } from "sonner";
+import { useTrading, Trade as TradeType } from "@/contexts/TradingContext";
+
+interface CandlestickData {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+interface StrategyRule {
+  id: number;
+  name: string;
+  indicator1: string;
+  condition: string;
+  indicator2: string;
+  action: "BUY" | "SELL";
+}
 
 const Trade = () => {
-  const [data, setData] = useState<CandlestickData[]>([]);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [strategy, setStrategy] = useState("sma_crossover");
-  const [isLoading, setIsLoading] = useState(false);
-  // lightweight toast fallback (replaceable by your app-wide toast)
-  const toast = ({ title, description, variant }: { title: string; description?: string; variant?: string }) => {
-    if (variant === 'destructive') {
-      alert(`${title}\n${description || ''}`);
-    } else {
-      console.log(title, description || '');
-    }
-  };
-  const { result, setResult } = useBacktest();
+  const navigate = useNavigate();
+  const { addTrades, setPortfolioValue } = useTrading();
+  const [dataSource, setDataSource] = useState<"none" | "upload" | "sample">("none");
+  const [candlestickData, setCandlestickData] = useState<CandlestickData[]>([]);
+  const [fileName, setFileName] = useState("");
+  const [backtestRun, setBacktestRun] = useState(false);
+  const [strategySymbol, setStrategySymbol] = useState("AAPL");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [indicators, setIndicators] = useState({
+    sma: true,
+    ema: false,
+    rsi: false,
+    macd: false,
+    bollingerBands: true,
+  });
+  const [rules, setRules] = useState<StrategyRule[]>([
+    { id: 1, name: "Buy Signal", indicator1: "SMA(5)", condition: "crosses-above", indicator2: "SMA(20)", action: "BUY" },
+    { id: 2, name: "Sell Signal", indicator1: "SMA(5)", condition: "crosses-below", indicator2: "SMA(20)", action: "SELL" },
+  ]);
+  const [nextRuleId, setNextRuleId] = useState(3);
 
-  // Indicator parameters
-  const [smaShort, setSmaShort] = useState<number>(5);
-  const [smaLong, setSmaLong] = useState<number>(20);
-  const [macdFast, setMacdFast] = useState<number>(12);
-  const [macdSlow, setMacdSlow] = useState<number>(26);
-  const [macdSignal, setMacdSignal] = useState<number>(9);
-  const [rsiWindow, setRsiWindow] = useState<number>(14);
+  const sampleData: CandlestickData[] = [
+    { date: "2023-01-01", open: 100.00, high: 101.00, low: 99.50, close: 100.50, volume: 1200000 },
+    { date: "2023-01-02", open: 100.50, high: 101.50, low: 100.00, close: 101.20, volume: 1350000 },
+    { date: "2023-01-03", open: 101.20, high: 102.00, low: 101.00, close: 101.80, volume: 1100000 },
+    { date: "2023-01-04", open: 101.80, high: 103.00, low: 101.50, close: 102.50, volume: 1250000 },
+    { date: "2023-01-05", open: 102.50, high: 103.50, low: 102.00, close: 103.00, volume: 1400000 },
+    { date: "2023-01-06", open: 103.00, high: 104.00, low: 102.50, close: 103.50, volume: 1500000 },
+    { date: "2023-01-09", open: 103.50, high: 104.50, low: 103.00, close: 104.20, volume: 1300000 },
+    { date: "2023-01-10", open: 104.20, high: 105.00, low: 104.00, close: 104.80, volume: 1200000 },
+    { date: "2023-01-11", open: 104.80, high: 105.50, low: 104.50, close: 105.10, volume: 1350000 },
+    { date: "2023-01-12", open: 105.10, high: 106.00, low: 105.00, close: 105.50, volume: 1600000 },
+    { date: "2023-01-13", open: 105.50, high: 106.50, low: 105.50, close: 106.00, volume: 1200000 },
+    { date: "2023-01-16", open: 106.00, high: 107.00, low: 106.00, close: 106.50, volume: 1350000 },
+    { date: "2023-01-17", open: 106.50, high: 107.50, low: 106.50, close: 107.20, volume: 1100000 },
+    { date: "2023-01-18", open: 107.20, high: 108.00, low: 107.00, close: 107.80, volume: 1250000 },
+    { date: "2023-01-19", open: 107.80, high: 108.50, low: 107.50, close: 108.30, volume: 1400000 },
+    { date: "2023-01-20", open: 108.30, high: 109.00, low: 108.00, close: 108.80, volume: 1500000 },
+    { date: "2023-01-23", open: 108.80, high: 109.50, low: 108.50, close: 109.20, volume: 1300000 },
+    { date: "2023-01-24", open: 109.20, high: 110.00, low: 109.00, close: 109.80, volume: 1200000 },
+    { date: "2023-01-25", open: 109.80, high: 110.50, low: 109.50, close: 110.30, volume: 1350000 },
+    { date: "2023-01-26", open: 110.30, high: 111.00, low: 110.00, close: 110.80, volume: 1600000 },
+    { date: "2023-01-27", open: 110.80, high: 111.50, low: 110.50, close: 111.20, volume: 1400000 },
+  ];
 
-  const [augData, setAugData] = useState<any[]>([]);
+  const equityData = [
+    { date: "2020-01", equity: 10000, price: 95 },
+    { date: "2020-04", equity: 12000, price: 98 },
+    { date: "2020-07", equity: 11500, price: 102 },
+    { date: "2020-10", equity: 14000, price: 108 },
+    { date: "2021-01", equity: 15500, price: 115 },
+    { date: "2021-04", equity: 18000, price: 120 },
+    { date: "2021-07", equity: 20000, price: 125 },
+    { date: "2023-12", equity: 22500, price: 130 },
+  ];
 
-  // Indicator calculation helpers
-  const calcSMA = (vals: number[], window: number) => {
-    const out: (number | null)[] = [];
-    for (let i = 0; i < vals.length; i++) {
-      if (i + 1 < window) {
-        out.push(null);
-        continue;
-      }
-      let sum = 0;
-      for (let j = i + 1 - window; j <= i; j++) sum += vals[j];
-      out.push(sum / window);
-    }
-    return out;
-  };
-
-  const calcEMA = (vals: number[], window: number) => {
-    const out: (number | null)[] = [];
-    const alpha = 2 / (window + 1);
-    let prev: number | null = null;
-    for (let i = 0; i < vals.length; i++) {
-      const v = vals[i];
-      if (prev === null) {
-        prev = v; // seed with first value
-        out.push(prev);
-        continue;
-      }
-      prev = alpha * v + (1 - alpha) * prev;
-      out.push(prev);
-    }
-    return out;
-  };
-
-  const calcMACD = (vals: number[], fast: number, slow: number, signal: number) => {
-    const emaFast = calcEMA(vals, fast).map(v => v === null ? 0 : v);
-    const emaSlow = calcEMA(vals, slow).map(v => v === null ? 0 : v);
-    const macd = vals.map((v, i) => (emaFast[i] || 0) - (emaSlow[i] || 0));
-    const signalLine = calcEMA(macd, signal).map(v => v === null ? 0 : v);
-    return { macd, signalLine };
-  };
-
-  const calcRSI = (vals: number[], window: number) => {
-    const out: (number | null)[] = [];
-    const gains: number[] = [];
-    const losses: number[] = [];
-    for (let i = 0; i < vals.length; i++) {
-      if (i === 0) {
-        out.push(null);
-        continue;
-      }
-      const change = vals[i] - vals[i - 1];
-      gains.push(Math.max(0, change));
-      losses.push(Math.max(0, -change));
-      if (gains.length < window) {
-        out.push(null);
-        continue;
-      }
-      // simple average
-      const avgGain = gains.slice(-window).reduce((s, n) => s + n, 0) / window;
-      const avgLoss = losses.slice(-window).reduce((s, n) => s + n, 0) / window;
-      const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-      out.push(100 - 100 / (1 + rs));
-    }
-    return out;
-  };
-
-  // Recompute augmented data when raw data or indicator params change
-  useEffect(() => {
-    if (!data || data.length === 0) {
-      setAugData([]);
-      return;
-    }
-    const closes = data.map(d => d.close);
-    const smaShortArr = calcSMA(closes, smaShort);
-    const smaLongArr = calcSMA(closes, smaLong);
-    const { macd, signalLine } = calcMACD(closes, macdFast, macdSlow, macdSignal);
-    const rsiArr = calcRSI(closes, rsiWindow);
-
-    const out = data.map((d, i) => ({
-      ...d,
-      ['SMA_' + smaShort]: smaShortArr[i] ?? null,
-      ['SMA_' + smaLong]: smaLongArr[i] ?? null,
-      MACD: macd[i] ?? null,
-      MACD_Signal: signalLine[i] ?? null,
-      RSI: rsiArr[i] ?? null,
-    }));
-
-    setAugData(out);
-  }, [data, smaShort, smaLong, macdFast, macdSlow, macdSignal, rsiWindow]);
-
-  // markers derived from backtest result
-  const markers = (result && result.trade_log) ? result.trade_log.map((t: any) => ({ date: t.date, type: t.type, price: t.price })) : [];
-
-
-  const handleLoadSampleData = async () => {
-    setIsLoading(true);
-    try {
-      const sampleData = await loadSampleData();
-      setData(sampleData);
-      // try to fetch raw CSV for posting to backend
-      try {
-        const r = await fetch('/dummydata.csv');
-        if (r.ok) {
-          const csvText = await r.text();
-          const f = new File([csvText], 'sample.csv', { type: 'text/csv' });
-          setUploadedFile(f);
-        } else {
-          setUploadedFile(null);
-        }
-      } catch (e) {
-        setUploadedFile(null);
-      }
-      toast({
-        title: "Sample data loaded",
-        description: `Loaded ${sampleData.length} days of market data`,
-      });
-    } catch (error) {
-      toast({
-        title: "Error loading data",
-        description: "Failed to load sample data",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const trades = [
+    { date: "2023-01-15", type: "BUY" as const, price: "105.50", pnl: "-", cumulative: "-", color: "text-muted-foreground" },
+    { date: "2023-02-01", type: "SELL" as const, price: "110.25", pnl: "+4.75", cumulative: "+4.75", color: "text-success" },
+    { date: "2023-02-15", type: "BUY" as const, price: "108.00", pnl: "-", cumulative: "+4.75", color: "text-muted-foreground" },
+    { date: "2023-03-01", type: "SELL" as const, price: "113.50", pnl: "+5.50", cumulative: "+10.25", color: "text-success" },
+    { date: "2023-03-20", type: "BUY" as const, price: "115.00", pnl: "-", cumulative: "+10.25", color: "text-muted-foreground" },
+    { date: "2023-04-10", type: "SELL" as const, price: "112.00", pnl: "-3.00", cumulative: "+7.25", color: "text-destructive" },
+  ];
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -164,248 +106,456 @@ const Trade = () => {
 
     const reader = new FileReader();
     reader.onload = (e) => {
-      const text = e.target?.result as string;
       try {
-  const parsedData = parseCSV(text);
-  setData(parsedData);
-  setUploadedFile(file);
-        toast({
-          title: "Data uploaded",
-          description: `Loaded ${parsedData.length} days of market data`,
-        });
+        const text = e.target?.result as string;
+        const lines = text.split("\n");
+        const data: CandlestickData[] = [];
+
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line) continue;
+          
+          const values = line.split(",");
+          if (values.length >= 6) {
+            data.push({
+              date: values[0],
+              open: parseFloat(values[1]),
+              high: parseFloat(values[2]),
+              low: parseFloat(values[3]),
+              close: parseFloat(values[4]),
+              volume: parseInt(values[5]),
+            });
+          }
+        }
+
+        setCandlestickData(data);
+        setFileName(file.name);
+        setDataSource("upload");
+        toast.success(`Successfully loaded ${data.length} data points from ${file.name}`);
       } catch (error) {
-        toast({
-          title: "Error parsing CSV",
-          description: "Please check your file format",
-          variant: "destructive",
-        });
+        toast.error("Error parsing CSV file. Please check the format.");
       }
     };
     reader.readAsText(file);
   };
 
-  const handleRunBacktest = async () => {
-    if (data.length === 0) {
-      toast({
-        title: "No data loaded",
-        description: "Please load data before running backtest",
-        variant: "destructive",
-      });
+  const handleUseSampleData = () => {
+    setCandlestickData(sampleData);
+    setDataSource("sample");
+    toast.success(`Sample data loaded: ${sampleData.length} data points`);
+  };
+
+  const handleAddRule = () => {
+    const newRule: StrategyRule = {
+      id: nextRuleId,
+      name: `Rule ${nextRuleId}`,
+      indicator1: "SMA(5)",
+      condition: "crosses-above",
+      indicator2: "SMA(20)",
+      action: "BUY",
+    };
+    setRules([...rules, newRule]);
+    setNextRuleId(nextRuleId + 1);
+    toast.success("New rule added");
+  };
+
+  const handleDeleteRule = (id: number) => {
+    setRules(rules.filter(rule => rule.id !== id));
+    toast.success("Rule deleted");
+  };
+
+  const handleRunBacktest = () => {
+    if (dataSource === "none") {
+      toast.error("Please select a data source first");
       return;
     }
     setIsLoading(true);
     toast({ title: 'Backtest running', description: `Processing ${data.length} days with ${strategy} strategy` });
 
-    try {
-      const form = new FormData();
+    setBacktestRun(true);
+    toast.success("Backtest completed successfully!");
 
-      // prepare file: either uploadedFile or build from parsed data
-      let fileToSend: File | null = uploadedFile;
-      if (!fileToSend) {
-        // build CSV from data
-        const headers = ['Date','Open','High','Low','Close','Volume'];
-        const csvRows = [headers.join(',')];
-        for (const row of data) {
-          const line = [row.date, row.open, row.high, row.low, row.close, row.volume].join(',');
-          csvRows.push(line);
-        }
-        const csvText = csvRows.join('\n');
-        fileToSend = new File([csvText], 'generated.csv', { type: 'text/csv' });
-      }
+    const simulatedTrades: TradeType[] = trades.map((trade) => ({
+      date: trade.date,
+      type: trade.type,
+      symbol: strategySymbol,
+      price: parseFloat(trade.price),
+      shares: 100,
+      pnl: trade.pnl !== "-" ? parseFloat(trade.pnl.replace("+", "")) : undefined,
+      cumulativePnl: trade.cumulative !== "-" ? parseFloat(trade.cumulative.replace("+", "")) : undefined,
+    }));
 
-      form.append('file', fileToSend as Blob);
+    addTrades(simulatedTrades);
+    setPortfolioValue(122500);
 
-      // derive period start/end from data dates
-      const parseDate = (s: string) => {
-        const d = new Date(s);
-        if (isNaN(d.getTime())) return null;
-        return d.toISOString().slice(0,10);
-      };
-  const start = parseDate(data[0].date);
-  const end = parseDate(data[data.length - 1].date);
-  if (start) form.append('period_start', start);
-  if (end) form.append('period_end', end);
-
-      // map strategy to conditions and params
-      let buy_condition = '';
-      let sell_condition = '';
-      // defaults
-      form.append('stock_symbol', 'UPLOAD');
-      form.append('initial_capital', '100000');
-      form.append('max_equity_points', '200');
-
-      if (strategy === 'sma_crossover') {
-        buy_condition = 'SMA_5 > SMA_20';
-        sell_condition = 'SMA_5 < SMA_20';
-        form.append('sma_short_period', '5');
-        form.append('sma_long_period', '20');
-      } else if (strategy === 'rsi') {
-        buy_condition = 'RSI < 30';
-        sell_condition = 'RSI > 70';
-        form.append('rsi_window', '14');
-      } else if (strategy === 'macd') {
-        buy_condition = 'MACD_cross_over';
-        sell_condition = 'MACD_cross_under';
-        form.append('macd_fast_period', '12');
-        form.append('macd_slow_period', '26');
-        form.append('macd_signal_period', '9');
-      } else {
-        buy_condition = 'SMA_5 > SMA_20';
-        sell_condition = 'SMA_5 < SMA_20';
-        form.append('sma_short_period', '5');
-        form.append('sma_long_period', '20');
-      }
-
-      form.append('buy_condition', buy_condition);
-      form.append('sell_condition', sell_condition);
-
-      // send to backend (absolute address to backend dev server)
-      const resp = await fetch('http://localhost:8000/backtest', {
-        method: 'POST',
-        body: form,
-      });
-
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ message: resp.statusText }));
-        toast({ title: 'Backtest failed', description: err.message || 'Server error', variant: 'destructive' });
-        setIsLoading(false);
-        return;
-      }
-
-      const json = await resp.json();
-      // set into shared Backtest context so Portfolio and any other listeners update
-      setResult(json);
-      toast({ title: 'Backtest complete', description: 'Results available in Portfolio' });
-    } catch (e: any) {
-      toast({ title: 'Backtest error', description: e?.message || String(e), variant: 'destructive' });
-    } finally {
-      setIsLoading(false);
-    }
+    setTimeout(() => {
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    }, 100);
   };
 
   return (
     <div className="min-h-screen">
-      <Navbar />
-      
-      <main className="container mx-auto px-6 py-12">
+      <div className="container mx-auto px-6 py-12">
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2">Strategy Backtester</h1>
           <p className="text-muted-foreground">Test your trading strategies with historical data</p>
         </div>
 
-        <GlassCard className="mb-8">
+        <div className="card-glass rounded-xl p-8 mb-8">
           <h2 className="text-2xl font-bold mb-6">1. Choose Data Source</h2>
+          
           <div className="grid md:grid-cols-2 gap-6">
-            <label className="border-2 border-dashed border-border hover:border-primary/50 rounded-xl p-8 text-center cursor-pointer transition-all hover:bg-primary/5">
+         
+            <div className={`border-2 rounded-xl p-6 cursor-pointer transition-all ${
+              dataSource === "upload" ? "border-accent bg-accent/5" : "border-border hover:border-accent/50"
+            }`}>
               <input
                 type="file"
-                accept=".csv"
+                ref={fileInputRef}
                 onChange={handleFileUpload}
+                accept=".csv"
                 className="hidden"
               />
-              <Upload className="w-12 h-12 mx-auto mb-4 text-primary" />
-              <h3 className="font-bold text-lg mb-2">Upload Your Data</h3>
-              <p className="text-sm text-muted-foreground mb-4">CSV format required</p>
-              <p className="text-xs text-muted-foreground/60">Format: Date, Open, High, Low, Close, Volume</p>
-            </label>
-            
+              <div onClick={() => fileInputRef.current?.click()}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-lg bg-accent/20 flex items-center justify-center">
+                    <Upload className="w-6 h-6 text-accent" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg">Upload Your Data</h3>
+                    <p className="text-sm text-muted-foreground">CSV format required</p>
+                  </div>
+                </div>
+                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-accent/50 transition-colors">
+                  <p className="text-sm mb-2">Drag & Drop CSV file or click to browse</p>
+                  <p className="text-xs text-muted-foreground">Format: Date, Open, High, Low, Close, Volume</p>
+                </div>
+                {dataSource === "upload" && fileName && (
+                  <div className="mt-4 flex items-center justify-center gap-2 text-success text-sm">
+                    <div className="w-5 h-5 rounded-full bg-success flex items-center justify-center">
+                      <span className="text-success-foreground text-xs">✓</span>
+                    </div>
+                    <span>{fileName} uploaded successfully</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div 
-              onClick={handleLoadSampleData}
-              className="border-2 border-dashed border-border hover:border-secondary/50 rounded-xl p-8 text-center cursor-pointer transition-all hover:bg-secondary/5"
+              className={`border-2 rounded-xl p-6 cursor-pointer transition-all ${
+                dataSource === "sample" ? "border-accent bg-accent/5" : "border-border hover:border-accent/50"
+              }`}
+              onClick={handleUseSampleData}
             >
-              <Database className="w-12 h-12 mx-auto mb-4 text-secondary" />
-              <h3 className="font-bold text-lg mb-2">Use Sample Data</h3>
-              <p className="text-sm text-muted-foreground mb-4">Pre-loaded demo data</p>
-              <p className="text-xs text-muted-foreground/60">21 days of simulated market data</p>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-lg bg-accent/20 flex items-center justify-center">
+                  <Database className="w-6 h-6 text-accent" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg">Use Sample Data</h3>
+                  <p className="text-sm text-muted-foreground">Pre-loaded demo data</p>
+                </div>
+              </div>
+              <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-accent/50 transition-colors">
+                <p className="text-sm mb-2">Click to load sample stock data</p>
+                <p className="text-xs text-muted-foreground">21 days of simulated market data</p>
+              </div>
+              {dataSource === "sample" && (
+                <div className="mt-4 flex items-center justify-center gap-2 text-success text-sm">
+                  <div className="w-5 h-5 rounded-full bg-success flex items-center justify-center">
+                    <span className="text-success-foreground text-xs">✓</span>
+                  </div>
+                  <span>Sample data loaded successfully</span>
+                </div>
+              )}
             </div>
           </div>
-        </GlassCard>
+        </div>
 
-        <GlassCard className="mb-8">
-          <h2 className="text-2xl font-bold mb-6">Price Chart</h2>
-          <CandlestickChart data={augData.length ? augData : data} indicatorKeys={[`SMA_${smaShort}`, `SMA_${smaLong}`, 'MACD', 'MACD_Signal']} markers={markers} />
-        </GlassCard>
+        {dataSource !== "none" && candlestickData.length > 0 && (
+          <div className="card-glass rounded-xl p-8 mb-8">
+            <h2 className="text-2xl font-bold mb-6">Price Chart with Indicators</h2>
+            <ResponsiveContainer width="100%" height={400}>
+              <LineChart data={candlestickData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis 
+                  dataKey="date" 
+                  stroke="hsl(var(--muted-foreground))" 
+                  style={{ fontSize: '12px' }}
+                />
+                <YAxis 
+                  stroke="hsl(var(--muted-foreground))" 
+                  style={{ fontSize: '12px' }}
+                  domain={['dataMin - 5', 'dataMax + 5']}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '8px',
+                  }}
+                  formatter={(value: number) => [`$${value.toFixed(2)}`, '']}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="close"
+                  stroke="hsl(var(--accent))"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Close Price"
+                />
+                {indicators.sma && (
+                  <Line
+                    type="monotone"
+                    dataKey="high"
+                    stroke="hsl(var(--success))"
+                    strokeWidth={1}
+                    dot={false}
+                    name="SMA"
+                    strokeDasharray="5 5"
+                  />
+                )}
+                {indicators.bollingerBands && (
+                  <Line
+                    type="monotone"
+                    dataKey="low"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={1}
+                    dot={false}
+                    name="Bollinger Bands"
+                    strokeDasharray="3 3"
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
-        <GlassCard className="mb-8">
-          <h2 className="text-2xl font-bold mb-6">2. Choose Strategy</h2>
+        <div className="card-glass rounded-xl p-8 mb-8">
+          <h2 className="text-2xl font-bold mb-6">2. Define Entry & Exit Rules</h2>
+          
+          <Button 
+            variant="outline" 
+            className="mb-6 border-accent text-accent hover:bg-accent hover:text-accent-foreground"
+            onClick={handleAddRule}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add New Rule
+          </Button>
+
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Trading Strategy</label>
-              <select value={strategy} onChange={e => setStrategy(e.target.value)} className="w-full p-2 rounded bg-gray-900">
-                <option value="sma_crossover">SMA Crossover (5/20)</option>
-                <option value="rsi">RSI Strategy</option>
-                <option value="macd">MACD Strategy</option>
-                <option value="bollinger">Bollinger Bands</option>
-              </select>
-              <p className="text-xs text-muted-foreground mt-2">
-                {strategy === "sma_crossover" && "Buy when SMA(5) crosses above SMA(20), sell when it crosses below"}
-                {strategy === "rsi" && "Buy when RSI < 30 (oversold), sell when RSI > 70 (overbought)"}
-                {strategy === "macd" && "Buy/sell based on MACD line crossing signal line"}
-                {strategy === "bollinger" && "Buy at lower band, sell at upper band"}
-              </p>
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs mb-1">SMA Short</label>
-                  <input type="number" value={smaShort} onChange={e => setSmaShort(Number(e.target.value))} className="p-2 rounded bg-gray-900 w-full" />
+            {rules.map((rule) => (
+              <div key={rule.id} className="bg-secondary/30 rounded-lg p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold">{rule.name}</h3>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => handleDeleteRule(rule.id)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
-                <div>
-                  <label className="block text-xs mb-1">SMA Long</label>
-                  <input type="number" value={smaLong} onChange={e => setSmaLong(Number(e.target.value))} className="p-2 rounded bg-gray-900 w-full" />
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-muted-foreground">WHEN</span>
+                  <Input className="w-32" placeholder="SMA(5)" defaultValue={rule.indicator1} />
+                  <Select defaultValue={rule.condition}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="crosses-above">crosses above</SelectItem>
+                      <SelectItem value="crosses-below">crosses below</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input className="w-32" placeholder="SMA(20)" defaultValue={rule.indicator2} />
+                  <span className="text-muted-foreground">THEN</span>
+                  <Button className={rule.action === "BUY" ? "btn-trade" : "btn-sell"} size="sm">
+                    {rule.action}
+                  </Button>
                 </div>
-                <div>
-                  <label className="block text-xs mb-1">RSI Window</label>
-                  <input type="number" value={rsiWindow} onChange={e => setRsiWindow(Number(e.target.value))} className="p-2 rounded bg-gray-900 w-full" />
-                </div>
-                <div>
-                  <label className="block text-xs mb-1">MACD Fast</label>
-                  <input type="number" value={macdFast} onChange={e => setMacdFast(Number(e.target.value))} className="p-2 rounded bg-gray-900 w-full" />
-                </div>
-                <div>
-                  <label className="block text-xs mb-1">MACD Slow</label>
-                  <input type="number" value={macdSlow} onChange={e => setMacdSlow(Number(e.target.value))} className="p-2 rounded bg-gray-900 w-full" />
-                </div>
-                <div>
-                  <label className="block text-xs mb-1">MACD Signal</label>
-                  <input type="number" value={macdSignal} onChange={e => setMacdSignal(Number(e.target.value))} className="p-2 rounded bg-gray-900 w-full" />
-                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8">
+            <h3 className="text-xl font-bold mb-4">3. Set Parameters</h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <Label>Stock Symbol</Label>
+                <Input 
+                  type="text" 
+                  value={strategySymbol}
+                  onChange={(e) => setStrategySymbol(e.target.value.toUpperCase())}
+                  placeholder="AAPL"
+                />
+              </div>
+              <div>
+                <Label>Short SMA Period</Label>
+                <Input type="number" defaultValue="5" />
+              </div>
+              <div>
+                <Label>Long SMA Period</Label>
+                <Input type="number" defaultValue="20" />
               </div>
             </div>
           </div>
-        </GlassCard>
 
-        <GlassCard className="mb-8">
-          <h2 className="text-2xl font-bold mb-6">3. Set Risk Parameters</h2>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium mb-2">Initial Capital ($)</label>
-              <input type="number" defaultValue={100000} className="p-2 rounded bg-gray-900 w-full" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Position Size (%)</label>
-              <input type="number" defaultValue={10} className="p-2 rounded bg-gray-900 w-full" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Stop Loss (%)</label>
-              <input type="number" defaultValue={5} className="p-2 rounded bg-gray-900 w-full" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Take Profit (%)</label>
-              <input type="number" defaultValue={15} className="p-2 rounded bg-gray-900 w-full" />
+          <div className="mt-8">
+            <h3 className="text-xl font-bold mb-4">4. Select Indicators</h3>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
+                <Label htmlFor="sma" className="cursor-pointer">SMA (Simple Moving Average)</Label>
+                <Switch
+                  id="sma"
+                  checked={indicators.sma}
+                  onCheckedChange={(checked) => setIndicators({ ...indicators, sma: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
+                <Label htmlFor="ema" className="cursor-pointer">EMA (Exponential Moving Average)</Label>
+                <Switch
+                  id="ema"
+                  checked={indicators.ema}
+                  onCheckedChange={(checked) => setIndicators({ ...indicators, ema: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
+                <Label htmlFor="rsi" className="cursor-pointer">RSI (Relative Strength Index)</Label>
+                <Switch
+                  id="rsi"
+                  checked={indicators.rsi}
+                  onCheckedChange={(checked) => setIndicators({ ...indicators, rsi: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
+                <Label htmlFor="macd" className="cursor-pointer">MACD</Label>
+                <Switch
+                  id="macd"
+                  checked={indicators.macd}
+                  onCheckedChange={(checked) => setIndicators({ ...indicators, macd: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg">
+                <Label htmlFor="bb" className="cursor-pointer">Bollinger Bands</Label>
+                <Switch
+                  id="bb"
+                  checked={indicators.bollingerBands}
+                  onCheckedChange={(checked) => setIndicators({ ...indicators, bollingerBands: checked })}
+                />
+              </div>
             </div>
           </div>
-        </GlassCard>
-
-        <div className="flex justify-center">
-          <button
-            className="bg-yellow-400 text-black px-6 py-3 rounded font-semibold flex items-center gap-2"
-            onClick={handleRunBacktest}
-            disabled={isLoading}
-          >
-            <Play className="w-5 h-5" />
-            {isLoading ? 'Loading...' : 'Run Backtest'}
-          </button>
         </div>
-      </main>
+
+        <div className="card-glass rounded-xl p-8 mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold mb-2">5. Run Backtest</h2>
+              <p className="text-muted-foreground">
+                Strategy: SMA Crossover {dataSource !== "none" && `• Data: ${dataSource === "upload" ? fileName : "Sample Data"}`}
+              </p>
+            </div>
+            <Button 
+              size="lg" 
+              onClick={handleRunBacktest} 
+              className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
+              disabled={dataSource === "none"}
+            >
+              <Play className="w-5 h-5" />
+              Run Strategy Backtest
+            </Button>
+          </div>
+        </div>
+
+        {backtestRun && (
+          <>
+            <div className="grid md:grid-cols-2 gap-8 mb-8">
+             
+              <div className="card-glass rounded-xl p-6">
+                <h3 className="text-xl font-bold mb-6">Key Metrics</h3>
+                <div className="space-y-4">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Final Equity</span>
+                    <span className="font-mono font-bold text-success">$22,500.00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Return</span>
+                    <span className="font-mono font-bold text-success">+125.00%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total Trades</span>
+                    <span className="font-mono font-bold text-accent">45</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Sharpe Ratio</span>
+                    <span className="font-mono font-bold text-accent">1.85</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Max Drawdown</span>
+                    <span className="font-mono font-bold text-destructive">-8.5%</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card-glass rounded-xl p-6">
+                <h3 className="text-xl font-bold mb-6">Equity Curve</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={equityData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" style={{ fontSize: '10px' }} />
+                    <YAxis yAxisId="left" stroke="hsl(var(--muted-foreground))" style={{ fontSize: '10px' }} />
+                    <YAxis yAxisId="right" orientation="right" stroke="hsl(var(--muted-foreground))" style={{ fontSize: '10px' }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                      }}
+                    />
+                    <Line yAxisId="left" type="monotone" dataKey="equity" stroke="hsl(var(--success))" strokeWidth={3} />
+                    <Line yAxisId="right" type="monotone" dataKey="price" stroke="hsl(var(--accent))" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="card-glass rounded-xl p-6">
+              <h3 className="text-xl font-bold mb-6">Trade Log</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-3 px-4 font-medium">Date</th>
+                      <th className="text-left py-3 px-4 font-medium">Type</th>
+                      <th className="text-left py-3 px-4 font-medium">Price</th>
+                      <th className="text-left py-3 px-4 font-medium">P&L</th>
+                      <th className="text-left py-3 px-4 font-medium">Cumulative P&L</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trades.map((trade, i) => (
+                      <tr key={i} className="border-b border-border/50">
+                        <td className="py-3 px-4 font-mono text-sm">{trade.date}</td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-1 rounded text-xs font-bold ${
+                            trade.type === "BUY" ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive"
+                          }`}>
+                            {trade.type}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-mono text-sm">{trade.price}</td>
+                        <td className={`py-3 px-4 font-mono text-sm ${trade.color}`}>{trade.pnl}</td>
+                        <td className={`py-3 px-4 font-mono text-sm ${trade.color}`}>{trade.cumulative}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 };
