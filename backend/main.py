@@ -4,6 +4,8 @@ from typing import Annotated, Any, Dict, List
 
 import numpy as np
 import pandas as pd
+import ast
+import operator as _op
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -104,47 +106,163 @@ def execute_strategy(
     
     # Calculate MACD
     df = calculate_macd(df, macd_fast_period, macd_slow_period, macd_signal_period)
-
     # --- Dynamic Trade Signal Generation ---
-    df['Signal'] = 0.0
-    strategy_summary = 'Default: Simple MA Crossover'
-    
+    # We'll evaluate the buy/sell condition strings per-row using a safe AST evaluator
+    df['Signal'] = np.nan
+    strategy_summary = f"Buy:{buy_condition} | Sell:{sell_condition}"
+
     sma_short = df[f'SMA_{sma_short_period}']
     sma_long = df[f'SMA_{sma_long_period}']
-    
-    # Check for MACD strategy (highest priority if mentioned)
-    if 'MACD' in buy_condition or 'MACD' in sell_condition:
-        # MACD Crossover Strategy: Buy when MACD crosses Signal from below
-        macd_buy_cross = (df['MACD'] > df['MACD_Signal']) & (df['MACD'].shift(1) <= df['MACD_Signal'].shift(1))
-        macd_sell_cross = (df['MACD'] < df['MACD_Signal']) & (df['MACD'].shift(1) >= df['MACD_Signal'].shift(1))
-        
-        df.loc[macd_buy_cross, 'Signal'] = 1.0
-        df.loc[macd_sell_cross, 'Signal'] = -1.0
-        strategy_summary = 'MACD Crossover Strategy'
-    
-    # Check for combined SMA and RSI strategy
-    elif 'RSI' in buy_condition and 'SMA' in buy_condition:
-        # Combined SMA Crossover with RSI Filter
-        # Buy: Short SMA > Long SMA AND RSI < 70
-        # Sell: Short SMA < Long SMA OR RSI > 80 (Overbought exit)
-        
-        buy_signal = (sma_short > sma_long) & (df['RSI'] < 70)
-        sell_signal = (sma_short < sma_long) | (df['RSI'] > 80)
-        
-        df.loc[buy_signal, 'Signal'] = 1.0
-        df.loc[sell_signal, 'Signal'] = -1.0
-        strategy_summary = 'SMA Crossover with RSI Filter'
-        
-    # Fallback: Simple SMA Crossover
-    else:
-        df['Signal'] = np.where(sma_short > sma_long, 1.0, 0.0)
+
+    # Safe AST evaluator helpers
+    _ALLOWED_OPS = {
+        ast.Add: _op.add,
+        ast.Sub: _op.sub,
+        ast.Mult: _op.mul,
+        ast.Div: _op.truediv,
+        ast.Pow: _op.pow,
+        ast.BitXor: _op.xor,
+        ast.USub: _op.neg,
+        ast.Eq: _op.eq,
+        ast.NotEq: _op.ne,
+        ast.Lt: _op.lt,
+        ast.LtE: _op.le,
+        ast.Gt: _op.gt,
+        ast.GtE: _op.ge,
+        ast.And: lambda a, b: a and b,
+        ast.Or: lambda a, b: a or b,
+        ast.Not: lambda a: (not a),
+    }
+
+    def _eval_node(node, names):
+        if isinstance(node, ast.Expression):
+            return _eval_node(node.body, names)
+        if isinstance(node, ast.BoolOp):
+            val = _eval_node(node.values[0], names)
+            for v in node.values[1:]:
+                val = _ALLOWED_OPS[type(node.op)](val, _eval_node(v, names))
+            return val
+        if isinstance(node, ast.BinOp):
+            left = _eval_node(node.left, names)
+            right = _eval_node(node.right, names)
+            return _ALLOWED_OPS[type(node.op)](left, right)
+        if isinstance(node, ast.UnaryOp):
+            return _ALLOWED_OPS[type(node.op)](_eval_node(node.operand, names))
+        if isinstance(node, ast.Compare):
+            left = _eval_node(node.left, names)
+            for opn, comp in zip(node.ops, node.comparators):
+                right = _eval_node(comp, names)
+                if not _ALLOWED_OPS[type(opn)](left, right):
+                    return False
+                left = right
+            return True
+        if isinstance(node, ast.Name):
+            return names.get(node.id, False)
+        if isinstance(node, ast.Num):
+            return node.n
+        if isinstance(node, ast.Constant):
+            return node.value
+        raise ValueError(f"Unsupported expression element: {ast.dump(node)}")
+
+    def evaluate_bool_expr(expr: str, names: dict) -> bool:
+        try:
+            parsed = ast.parse(expr, mode='eval')
+            return bool(_eval_node(parsed, names))
+        except Exception:
+            return False
+
+    def evaluate_condition(cond_str: str, df_local: pd.DataFrame, row_idx: int) -> bool:
+        """
+        Evaluate a condition string for a specific row index (integer index in df_local).
+        Supports tokens like MACD_cross_over and MACD_cross_under plus comparisons between
+        MACD, SIGNAL, RSI, CLOSE, and SMA_N columns.
+        """
+        cond = (cond_str or "").strip()
+        if not cond:
+            return False
+
+        # Work on a copy of the condition to substitute cross tokens
+        work = cond
+
+        # Handle MACD cross tokens by looking at current and previous rows
+        try:
+            if 'MACD_cross_over' in work:
+                if row_idx > 0:
+                    cur_macd = df_local.iloc[row_idx]['MACD']
+                    cur_sig = df_local.iloc[row_idx]['MACD_Signal']
+                    prev_macd = df_local.iloc[row_idx - 1]['MACD']
+                    prev_sig = df_local.iloc[row_idx - 1]['MACD_Signal']
+                    cross = (cur_macd > cur_sig) and (prev_macd <= prev_sig)
+                else:
+                    cross = False
+                work = work.replace('MACD_cross_over', str(bool(cross)))
+
+            if 'MACD_cross_under' in work:
+                if row_idx > 0:
+                    cur_macd = df_local.iloc[row_idx]['MACD']
+                    cur_sig = df_local.iloc[row_idx]['MACD_Signal']
+                    prev_macd = df_local.iloc[row_idx - 1]['MACD']
+                    prev_sig = df_local.iloc[row_idx - 1]['MACD_Signal']
+                    cross = (cur_macd < cur_sig) and (prev_macd >= prev_sig)
+                else:
+                    cross = False
+                work = work.replace('MACD_cross_under', str(bool(cross)))
+        except Exception:
+            # If MACD columns are missing or NaN, fail safe
+            return False
+
+        # Build names mapping for AST evaluation (uppercase keys expected)
+        names = {}
+        # Numeric indicator mappings
+        try:
+            row = df_local.iloc[row_idx]
+        except Exception:
+            return False
+
+        # Common tokens
+        if 'MACD' in df_local.columns:
+            names['MACD'] = float(row.get('MACD', 0.0)) if not pd.isna(row.get('MACD', np.nan)) else 0.0
+        if 'MACD_Signal' in df_local.columns:
+            names['SIGNAL'] = float(row.get('MACD_Signal', 0.0)) if not pd.isna(row.get('MACD_Signal', np.nan)) else 0.0
+        if 'RSI' in df_local.columns:
+            names['RSI'] = float(row.get('RSI', 0.0)) if not pd.isna(row.get('RSI', np.nan)) else 0.0
+        names['CLOSE'] = float(row.get('Close', 0.0)) if not pd.isna(row.get('Close', np.nan)) else 0.0
+
+        # Add any SMA_N or EMA_N columns to names as uppercase (e.g., SMA_10)
+        for col in df_local.columns:
+            if col.upper().startswith('SMA') or col.upper().startswith('EMA'):
+                try:
+                    names[col.upper()] = float(row.get(col, 0.0)) if not pd.isna(row.get(col, np.nan)) else 0.0
+                except Exception:
+                    names[col.upper()] = 0.0
+
+        # Evaluate final boolean expression safely
+        return evaluate_bool_expr(work, names)
+
+    # Apply conditions per-row to determine whether to be long (1) or flat (0)
+    for i in range(len(df)):
+        try:
+            buy_hit = evaluate_condition(buy_condition, df, i)
+            sell_hit = evaluate_condition(sell_condition, df, i)
+        except Exception:
+            buy_hit = False
+            sell_hit = False
+
+        if buy_hit:
+            df.iloc[i, df.columns.get_loc('Signal')] = 1.0
+        elif sell_hit:
+            df.iloc[i, df.columns.get_loc('Signal')] = 0.0
+
+    # Carry forward last known signal (hold until changed), and default to flat
+    df['Signal'] = df['Signal'].ffill().fillna(0.0)
 
     # --- Portfolio Simulation ---
     df['Daily_Return'] = np.log(df['Close'] / df['Close'].shift(1))
-    # We shift the signal by 1 day to ensure we trade on the next day's open
-    df['Strategy_Return'] = df['Daily_Return'] * df['Signal'].shift(1) 
+    # We shift the signal by 1 row so signals are acted on the next bar
+    df['Strategy_Return'] = df['Daily_Return'] * df['Signal'].shift(1)
     df['Equity_Curve'] = np.exp(df['Strategy_Return'].cumsum())
 
+    # Drop rows with NaN produced by indicator windows
     df.dropna(inplace=True)
     df.attrs['strategy_summary'] = strategy_summary
 

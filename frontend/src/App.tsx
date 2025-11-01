@@ -1,20 +1,25 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
+import Trade from './pages/Trade';
+import Portfolio from './pages/Portfolio';
+import { BacktestProvider } from './context/BacktestContext';
 
 function App() {
   return (
     <Router>
-      <div style={{ minHeight: '100vh', background: '#000000' }}>
-        <Navbar />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/trade" element={<div style={{ color: 'white', textAlign: 'center', padding: '3rem' }}>Trade Page - Coming Soon</div>} />
-          <Route path="/portfolio" element={<div style={{ color: 'white', textAlign: 'center', padding: '3rem' }}>Portfolio Page - Coming Soon</div>} />
-          <Route path="/profile" element={<div style={{ color: 'white', textAlign: 'center', padding: '3rem' }}>Profile Page - Coming Soon</div>} />
-          <Route path="/basics" element={<div style={{ color: 'white', textAlign: 'center', padding: '3rem' }}>Basics Page - Coming Soon</div>} />
-        </Routes>
-      </div>
+      <BacktestProvider>
+        <div className="min-h-screen bg-black">
+          <Navbar />
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/trade" element={<Trade />} />
+            <Route path="/portfolio" element={<Portfolio />} />
+            <Route path="/news" element={<div className="text-white text-center p-12">News Page - Coming Soon</div>} />
+            <Route path="/basics" element={<div className="text-white text-center p-12">Basics Page - Coming Soon</div>} />
+          </Routes>
+        </div>
+      </BacktestProvider>
     </Router>
   );
 }

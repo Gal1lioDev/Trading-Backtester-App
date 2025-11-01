@@ -1,8 +1,7 @@
 import { Link } from "react-router-dom";
-import Navbar from "@/components/Navbar";
-import GlassCard from "@/components/GlassCard";
+import GlassCard from "../components/GlassCard";
 import { Briefcase, LineChart, TrendingUp, TrendingDown } from "lucide-react";
-import { Button } from "@/components/ui/button";
+//import { Button } from "../components/ui/button";
 
 const Home = () => {
   const trendingStocks = [
@@ -13,8 +12,6 @@ const Home = () => {
 
   return (
     <div className="min-h-screen">
-      <Navbar />
-      
       <main className="container mx-auto px-6 py-12">
       
         <div className="text-center mb-16">
