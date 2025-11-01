@@ -56,7 +56,6 @@ const Trade = () => {
   ]);
   const [nextRuleId, setNextRuleId] = useState(3);
 
-  // Sample stock data
   const sampleData: CandlestickData[] = [
     { date: "2023-01-01", open: 100.00, high: 101.00, low: 99.50, close: 100.50, volume: 1200000 },
     { date: "2023-01-02", open: 100.50, high: 101.50, low: 100.00, close: 101.20, volume: 1350000 },
@@ -171,11 +170,9 @@ const Trade = () => {
       return;
     }
 
-    // Simulate backtest
     setBacktestRun(true);
     toast.success("Backtest completed successfully!");
 
-    // Add simulated trades to context
     const simulatedTrades: TradeType[] = trades.map((trade) => ({
       date: trade.date,
       type: trade.type,
@@ -189,7 +186,6 @@ const Trade = () => {
     addTrades(simulatedTrades);
     setPortfolioValue(122500);
 
-    // Scroll to results
     setTimeout(() => {
       window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
     }, 100);
@@ -203,12 +199,11 @@ const Trade = () => {
           <p className="text-muted-foreground">Test your trading strategies with historical data</p>
         </div>
 
-        {/* Data Source Selection */}
         <div className="card-glass rounded-xl p-8 mb-8">
           <h2 className="text-2xl font-bold mb-6">1. Choose Data Source</h2>
           
           <div className="grid md:grid-cols-2 gap-6">
-            {/* Upload Option */}
+         
             <div className={`border-2 rounded-xl p-6 cursor-pointer transition-all ${
               dataSource === "upload" ? "border-accent bg-accent/5" : "border-border hover:border-accent/50"
             }`}>
@@ -244,7 +239,6 @@ const Trade = () => {
               </div>
             </div>
 
-            {/* Sample Data Option */}
             <div 
               className={`border-2 rounded-xl p-6 cursor-pointer transition-all ${
                 dataSource === "sample" ? "border-accent bg-accent/5" : "border-border hover:border-accent/50"
@@ -276,7 +270,6 @@ const Trade = () => {
           </div>
         </div>
 
-        {/* Candlestick Chart */}
         {dataSource !== "none" && candlestickData.length > 0 && (
           <div className="card-glass rounded-xl p-8 mb-8">
             <h2 className="text-2xl font-bold mb-6">Price Chart with Indicators</h2>
@@ -336,7 +329,6 @@ const Trade = () => {
           </div>
         )}
 
-        {/* Strategy Rule Builder */}
         <div className="card-glass rounded-xl p-8 mb-8">
           <h2 className="text-2xl font-bold mb-6">2. Define Entry & Exit Rules</h2>
           
@@ -454,7 +446,6 @@ const Trade = () => {
           </div>
         </div>
 
-        {/* Run Backtest */}
         <div className="card-glass rounded-xl p-8 mb-8">
           <div className="flex items-center justify-between">
             <div>
@@ -475,11 +466,10 @@ const Trade = () => {
           </div>
         </div>
 
-        {/* Results */}
         {backtestRun && (
           <>
             <div className="grid md:grid-cols-2 gap-8 mb-8">
-              {/* Key Metrics */}
+             
               <div className="card-glass rounded-xl p-6">
                 <h3 className="text-xl font-bold mb-6">Key Metrics</h3>
                 <div className="space-y-4">
@@ -506,7 +496,6 @@ const Trade = () => {
                 </div>
               </div>
 
-              {/* Equity Curve */}
               <div className="card-glass rounded-xl p-6">
                 <h3 className="text-xl font-bold mb-6">Equity Curve</h3>
                 <ResponsiveContainer width="100%" height={300}>
@@ -529,7 +518,6 @@ const Trade = () => {
               </div>
             </div>
 
-            {/* Trade Log */}
             <div className="card-glass rounded-xl p-6">
               <h3 className="text-xl font-bold mb-6">Trade Log</h3>
               <div className="overflow-x-auto">
