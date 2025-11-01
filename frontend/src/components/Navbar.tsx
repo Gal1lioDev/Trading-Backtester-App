@@ -1,68 +1,46 @@
-import { Link } from 'react-router-dom';
-import { TrendingUp } from 'lucide-react';
+import { Link, useLocation } from "react-router-dom";
+import { TrendingUp } from "lucide-react";
 
 const Navbar = () => {
+  const location = useLocation();
+  
+  const navItems = [
+    { path: "/", label: "Home" },
+    { path: "/trade", label: "Trade" },
+    { path: "/portfolio", label: "Portfolio" },
+    { path: "/news", label: "News" },
+    { path: "/basics", label: "Basics" },
+  ];
+
   return (
-    <nav style={styles.navbar}>
-      <div style={styles.container}>
-        <Link to="/" style={styles.logo}>
-          <TrendingUp size={28} color="#FDB022" />
-          <span style={styles.logoText}>StockPlay</span>
-        </Link>
-        <div style={styles.navLinks}>
-          <Link to="/" style={styles.navLink}>Home</Link>
-          <Link to="/trade" style={styles.navLink}>Trade</Link>
-          <Link to="/portfolio" style={styles.navLink}>Portfolio</Link>
-          <Link to="/profile" style={styles.navLink}>Profile</Link>
+    <nav className="sticky top-0 z-50 glass-card border-b">
+      <div className="container mx-auto px-6 py-4">
+        <div className="flex items-center gap-8">
+          <Link to="/" className="flex items-center gap-2 text-xl font-bold">
+            <TrendingUp className="w-6 h-6 text-primary" />
+            <span className="gradient-text">StockPlay</span>
+          </Link>
+          
+          <ul className="flex gap-2">
+            {navItems.map((item) => (
+              <li key={item.path}>
+                <Link
+                  to={item.path}
+                  className={`px-4 py-2 rounded-lg transition-all ${
+                    location.pathname === item.path
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </nav>
   );
-};
-
-const styles = {
-  navbar: {
-    background: 'rgba(20, 20, 20, 0.8)',
-    backdropFilter: 'blur(10px)',
-    borderBottom: '1px solid rgba(253, 176, 34, 0.1)',
-    padding: '1rem 0',
-    position: 'sticky' as const,
-    top: 0,
-    zIndex: 1000,
-  },
-  container: {
-    maxWidth: '1200px',
-    margin: '0 auto',
-    padding: '0 2rem',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  logo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    textDecoration: 'none',
-    transition: 'transform 0.2s',
-  },
-  logoText: {
-    fontSize: '1.5rem',
-    fontWeight: '700',
-    color: '#FDB022',
-  },
-  navLinks: {
-    display: 'flex',
-    gap: '2rem',
-    alignItems: 'center',
-  },
-  navLink: {
-    color: '#ffffff',
-    textDecoration: 'none',
-    fontSize: '1rem',
-    fontWeight: '500',
-    transition: 'color 0.2s',
-    position: 'relative' as const,
-  },
 };
 
 export default Navbar;
