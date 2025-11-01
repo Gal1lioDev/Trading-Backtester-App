@@ -169,6 +169,8 @@ const Trade = () => {
       toast.error("Please select a data source first");
       return;
     }
+    setIsLoading(true);
+    toast({ title: 'Backtest running', description: `Processing ${data.length} days with ${strategy} strategy` });
 
     setBacktestRun(true);
     toast.success("Backtest completed successfully!");
