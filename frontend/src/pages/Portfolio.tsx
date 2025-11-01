@@ -66,7 +66,6 @@ const Portfolio = () => {
   return (
     <div className="min-h-screen">
       <div className="container mx-auto px-6 py-12">
-        {/* Profile Header */}
         <div className="card-glass rounded-xl p-8 mb-8">
           <div className="flex items-center gap-6">
             <Avatar className="w-24 h-24 ring-4 ring-accent/20">
@@ -97,7 +96,6 @@ const Portfolio = () => {
           </div>
         </div>
 
-        {/* Portfolio Stats */}
         <div className="grid md:grid-cols-4 gap-4 mb-8">
           <div className="card-glass rounded-xl p-6">
             <p className="text-sm text-muted-foreground mb-1">Total Value</p>
@@ -121,7 +119,6 @@ const Portfolio = () => {
           </div>
         </div>
 
-        {/* Performance Chart */}
         <div className="card-glass rounded-xl p-6 mb-8">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold">Performance Chart</h2>
@@ -183,7 +180,6 @@ const Portfolio = () => {
           </ResponsiveContainer>
         </div>
 
-        {/* Watchlist */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold mb-4">My Watchlist</h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -193,7 +189,6 @@ const Portfolio = () => {
           </div>
         </div>
 
-        {/* Stats Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {stats.map((stat) => {
             const Icon = stat.icon;
@@ -209,7 +204,6 @@ const Portfolio = () => {
           })}
         </div>
 
-        {/* Trading Performance & Risk Metrics */}
         <div className="grid md:grid-cols-2 gap-8">
           <div className="card-glass rounded-xl p-6">
             <h2 className="text-2xl font-bold mb-6">Trading Statistics</h2>
