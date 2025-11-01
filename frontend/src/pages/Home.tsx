@@ -1,79 +1,77 @@
 import { Link } from "react-router-dom";
-import Navbar from "@/components/Navbar";
-import GlassCard from "@/components/GlassCard";
-import { Briefcase, LineChart, TrendingUp, TrendingDown } from "lucide-react";
+import { Briefcase, TrendingUp, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import StockCard from "@/components/StockCard";
 
 const Home = () => {
   const trendingStocks = [
-    { symbol: "AAPL", name: "Apple Inc.", price: 178.42, change: 2.36, icon: TrendingUp },
-    { symbol: "TSLA", name: "Tesla Inc.", price: 242.84, change: -1.21, icon: TrendingDown },
-    { symbol: "NVDA", name: "NVIDIA Corp.", price: 495.22, change: 2.55, icon: TrendingUp },
+    { symbol: "AAPL", name: "Apple Inc.", price: 178.42, change: 4.12, changePercent: 2.36 },
+    { symbol: "TSLA", name: "Tesla Inc.", price: 242.84, change: -2.98, changePercent: -1.21 },
+    { symbol: "GOOGL", name: "Alphabet Inc.", price: 141.80, change: 1.15, changePercent: 0.82 },
+    { symbol: "MSFT", name: "Microsoft Corp.", price: 378.91, change: 5.62, changePercent: 1.51 },
+    { symbol: "AMZN", name: "Amazon.com Inc.", price: 145.32, change: -0.45, changePercent: -0.31 },
+    { symbol: "NVDA", name: "NVIDIA Corp.", price: 495.22, change: 12.34, changePercent: 2.55 },
   ];
 
   return (
     <div className="min-h-screen">
-      <Navbar />
-      
-      <main className="container mx-auto px-6 py-12">
-      
-        <div className="text-center mb-16">
-          <h1 className="text-6xl font-bold mb-4">
-            <span className="gradient-text">Backtest</span> Your Trading Strategies
+      <div className="relative overflow-hidden py-20 bg-gradient-to-b from-primary/5 to-background">
+        <div className="container mx-auto px-6 text-center">
+          <h1 className="text-6xl font-bold mb-6">
+            <span className="text-gradient">Backtest</span> Your Trading Strategies
           </h1>
-          <p className="text-xl text-muted-foreground">
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-12">
             Professional-grade backtesting platform for data-driven traders
           </p>
-        </div>
 
-        <div className="grid md:grid-cols-2 gap-6 mb-16">
-          <Link to="/portfolio">
-            <GlassCard hover className="text-center border-2 border-primary/20 hover:border-primary/40">
-              <Briefcase className="w-16 h-16 mx-auto mb-4 text-primary" />
-              <h3 className="text-2xl font-bold mb-2">Portfolio</h3>
-              <p className="text-muted-foreground">View Performance</p>
-            </GlassCard>
-          </Link>
-          
-          <Link to="/trade">
-            <GlassCard hover className="text-center border-2 border-accent/20 hover:border-accent/40">
-              <LineChart className="w-16 h-16 mx-auto mb-4 text-accent" />
-              <h3 className="text-2xl font-bold mb-2">Trade</h3>
-              <p className="text-muted-foreground">Backtest Strategies</p>
-            </GlassCard>
-          </Link>
-        </div>
+          <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto mb-8">
+            <Link to="/portfolio">
+              <Button className="w-full h-32 text-xl bg-card hover:bg-card/80 border-2 border-accent/40 hover:border-accent transition-all group">
+                <div className="flex flex-col items-center gap-3">
+                  <Briefcase className="w-10 h-10 text-accent group-hover:scale-110 transition-transform" />
+                  <span className="font-bold">Portfolio</span>
+                  <span className="text-sm text-muted-foreground">View Performance</span>
+                </div>
+              </Button>
+            </Link>
 
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2">Trending Stocks</h2>
-          <p className="text-muted-foreground mb-6">Real-time market movers</p>
-          
-          <div className="grid md:grid-cols-3 gap-4">
-            {trendingStocks.map((stock) => (
-              <GlassCard key={stock.symbol} hover>
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <div className="font-mono font-bold text-lg">{stock.symbol}</div>
-                    <div className="text-sm text-muted-foreground">{stock.name}</div>
-                  </div>
-                  <stock.icon className={`w-6 h-6 ${stock.change > 0 ? "text-success" : "text-destructive"}`} />
+            <Link to="/trade">
+              <Button className="w-full h-32 text-xl bg-card hover:bg-card/80 border-2 border-accent/40 hover:border-accent transition-all group">
+                <div className="flex flex-col items-center gap-3">
+                  <TrendingUp className="w-10 h-10 text-accent group-hover:scale-110 transition-transform" />
+                  <span className="font-bold">Trade</span>
+                  <span className="text-sm text-muted-foreground">Backtest Strategies</span>
                 </div>
-                
-                <div className="flex justify-between items-end">
-                  <div className="text-2xl font-bold font-mono-tabular">${stock.price}</div>
-                  <div
-                    className={`font-mono-tabular font-bold ${
-                      stock.change > 0 ? "text-success" : "text-destructive"
-                    }`}
-                  >
-                    {stock.change > 0 ? "+" : ""}{stock.change}%
-                  </div>
+              </Button>
+            </Link>
+          </div>
+
+          <div className="max-w-4xl mx-auto">
+            <Link to="/basics">
+              <Button className="w-full h-20 bg-secondary hover:bg-secondary/80 transition-all group">
+                <div className="flex items-center gap-3">
+                  <BookOpen className="w-6 h-6 text-accent group-hover:scale-110 transition-transform" />
+                  <span className="font-bold text-lg">Basics of Backtesting</span>
+                  <span className="text-sm text-muted-foreground ml-auto">Learn More →</span>
                 </div>
-              </GlassCard>
-            ))}
+              </Button>
+            </Link>
           </div>
         </div>
-      </main>
+      </div>
+
+      <div className="container mx-auto px-6 py-16">
+        <div className="mb-8">
+          <h2 className="text-4xl font-bold mb-2">Trending Stocks</h2>
+          <p className="text-muted-foreground text-lg">Real-time market movers</p>
+        </div>
+        
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {trendingStocks.map((stock) => (
+            <StockCard key={stock.symbol} {...stock} />
+          ))}
+        </div>
+      </div>
     </div>
   );
 };
