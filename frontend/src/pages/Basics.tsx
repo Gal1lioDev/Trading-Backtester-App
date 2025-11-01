@@ -34,7 +34,7 @@ const Basics = () => {
   return (
     <div className="min-h-screen">
       <div className="container mx-auto px-6 py-12">
-        {/* Header */}
+       
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold mb-4">
             <span className="text-gradient">Basics of Backtesting</span>
@@ -44,7 +44,6 @@ const Basics = () => {
           </p>
         </div>
 
-        {/* Content Sections */}
         <div className="max-w-4xl mx-auto space-y-8">
           {sections.map((section, index) => {
             const Icon = section.icon;
@@ -66,7 +65,6 @@ const Basics = () => {
           })}
         </div>
 
-        {/* CTA */}
         <div className="max-w-4xl mx-auto mt-12 card-glass rounded-xl p-8 text-center">
           <h2 className="text-3xl font-bold mb-4">Ready to Start Backtesting?</h2>
           <p className="text-muted-foreground mb-6">

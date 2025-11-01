@@ -15,7 +15,6 @@ const Home = () => {
 
   return (
     <div className="min-h-screen">
-      {/* Hero Section */}
       <div className="relative overflow-hidden py-20 bg-gradient-to-b from-primary/5 to-background">
         <div className="container mx-auto px-6 text-center">
           <h1 className="text-6xl font-bold mb-6">
@@ -25,7 +24,6 @@ const Home = () => {
             Professional-grade backtesting platform for data-driven traders
           </p>
 
-          {/* Action Buttons */}
           <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto mb-8">
             <Link to="/portfolio">
               <Button className="w-full h-32 text-xl bg-card hover:bg-card/80 border-2 border-accent/40 hover:border-accent transition-all group">
@@ -62,7 +60,6 @@ const Home = () => {
         </div>
       </div>
 
-      {/* Trending Stocks */}
       <div className="container mx-auto px-6 py-16">
         <div className="mb-8">
           <h2 className="text-4xl font-bold mb-2">Trending Stocks</h2>
