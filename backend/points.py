@@ -55,7 +55,7 @@ async def create_equity_curve(
         # Read the uploaded file's content into memory
         content = await file.read()
         csv_data = io.StringIO(content.decode('utf-8'))
-        
+
         # Load the data into a pandas DataFrame
         df = pd.read_csv(csv_data)
 
@@ -69,18 +69,18 @@ async def create_equity_curve(
 
         df['Date'] = pd.to_datetime(df['Date'])
         df = df.sort_values(by='Date').reset_index(drop=True)
-        
+
         # --- 2. Calculate Equity Curve ---
         df['daily_return'] = df['Close'].pct_change().fillna(0)
         df['cumulative_return'] = (1 + df['daily_return']).cumprod()
         df['equity'] = initial_cash * df['cumulative_return']
-        
+
         # --- 3. Format Output ---
         output_df = df[['Date', 'equity']].copy()
         output_df['Date'] = output_df['Date'].dt.strftime('%Y-%m-%d')
         output_df['equity'] = output_df['equity'].round(2)
         output_df = output_df.rename(columns={'Date': 'date', 'equity': 'value'})
-        
+
         # Convert to a list of dictionaries and return
         return output_df.to_dict('records')
 
@@ -88,5 +88,3 @@ async def create_equity_curve(
         # Catch any other errors and return a helpful response
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
-# To run this app, save it as points.py and run the following command in your terminal:
-# uvicorn points:app --reload

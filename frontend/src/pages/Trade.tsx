@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { toast } from "sonner";
 import { useTrading, Trade as TradeType } from "@/contexts/TradingContext";
+import { useBacktest } from "../context/BacktestContext";
 
 interface CandlestickData {
   date: string;
@@ -37,6 +38,8 @@ interface StrategyRule {
 const Trade = () => {
   const navigate = useNavigate();
   const { addTrades, setPortfolioValue } = useTrading();
+  const { result, setResult } = useBacktest();
+  const [isLoading, setIsLoading] = useState(false);
   const [dataSource, setDataSource] = useState<"none" | "upload" | "sample">("none");
   const [candlestickData, setCandlestickData] = useState<CandlestickData[]>([]);
   const [fileName, setFileName] = useState("");
@@ -164,33 +167,82 @@ const Trade = () => {
     toast.success("Rule deleted");
   };
 
-  const handleRunBacktest = () => {
+  const handleRunBacktest = async () => {
     if (dataSource === "none") {
       toast.error("Please select a data source first");
       return;
     }
+
     setIsLoading(true);
-    toast({ title: 'Backtest running', description: `Processing ${data.length} days with ${strategy} strategy` });
+  toast(`Backtest running — Processing ${candlestickData.length} rows for ${strategySymbol}`);
 
-    setBacktestRun(true);
-    toast.success("Backtest completed successfully!");
+    try {
+      const form = new FormData();
 
-    const simulatedTrades: TradeType[] = trades.map((trade) => ({
-      date: trade.date,
-      type: trade.type,
-      symbol: strategySymbol,
-      price: parseFloat(trade.price),
-      shares: 100,
-      pnl: trade.pnl !== "-" ? parseFloat(trade.pnl.replace("+", "")) : undefined,
-      cumulativePnl: trade.cumulative !== "-" ? parseFloat(trade.cumulative.replace("+", "")) : undefined,
-    }));
+      // attach file if uploaded, else create CSV from sample data
+      const uploadedFile = fileInputRef.current?.files?.[0];
+      if (dataSource === 'upload' && uploadedFile) {
+        form.append('file', uploadedFile, uploadedFile.name);
+      } else {
+        // create a CSV blob from candlestickData
+        const header = 'Date,Open,High,Low,Close,Volume\n';
+        const rows = candlestickData.map(d => `${d.date},${d.open},${d.high},${d.low},${d.close},${d.volume}`).join('\n');
+        const blob = new Blob([header + rows], { type: 'text/csv' });
+        form.append('file', blob, `${strategySymbol || 'sample'}.csv`);
+      }
 
-    addTrades(simulatedTrades);
-    setPortfolioValue(122500);
+      // attach strategy as JSON
+      const strategyPayload = {
+        symbol: strategySymbol,
+        rules,
+        indicators,
+      };
+      form.append('strategy', JSON.stringify(strategyPayload));
 
-    setTimeout(() => {
-      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-    }, 100);
+      const resp = await fetch('http://localhost:8000/backtest', {
+        method: 'POST',
+        body: form,
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Backtest failed: ${resp.status} ${text}`);
+      }
+
+      const json = await resp.json();
+
+      // store result in BacktestContext
+      setResult(json as any);
+      setBacktestRun(true);
+      toast.success('Backtest completed successfully');
+
+      // if backend returned trade_log, add trades to TradingContext
+      if (Array.isArray((json as any).trade_log)) {
+        const mapped: TradeType[] = (json as any).trade_log.map((t: any) => ({
+          date: t.date,
+          type: (t.type ?? t.side ?? 'BUY').toUpperCase(),
+          symbol: strategySymbol,
+          price: Number(t.price ?? t.fill_price ?? t['Price'] ?? 0),
+          shares: Number(t.shares ?? 100),
+          pnl: t['P&L'] ?? t.pnl ?? undefined,
+          cumulativePnl: t['Cumulative P&L'] ?? t.cumulative ?? undefined,
+        }));
+        addTrades(mapped);
+      }
+
+      // if backend provided final equity, update portfolio value
+      if ((json as any).equity_final) {
+        setPortfolioValue(Number((json as any).equity_final));
+      }
+
+      // scroll into view for results
+      setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 100);
+    } catch (err: any) {
+      console.error('Backtest error', err);
+      toast.error(err?.message ?? 'Backtest failed');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -477,23 +529,23 @@ const Trade = () => {
                 <div className="space-y-4">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Final Equity</span>
-                    <span className="font-mono font-bold text-success">$22,500.00</span>
+                    <span className="font-mono font-bold text-success">${result?.equity_final?.toLocaleString() ?? '—'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Total Return</span>
-                    <span className="font-mono font-bold text-success">+125.00%</span>
+                    <span className="font-mono font-bold text-success">{result ? (Number(result['Return(%)']).toFixed(2) + '%') : '—'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Total Trades</span>
-                    <span className="font-mono font-bold text-accent">45</span>
+                    <span className="font-mono font-bold text-accent">{result?.['No. of trades'] ?? '—'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Sharpe Ratio</span>
-                    <span className="font-mono font-bold text-accent">1.85</span>
+                    <span className="font-mono font-bold text-accent">{result?.sharpe_ratio ? Number(result.sharpe_ratio).toFixed(2) : '—'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Max Drawdown</span>
-                    <span className="font-mono font-bold text-destructive">-8.5%</span>
+                    <span className="font-mono font-bold text-destructive">{(result as any)?.max_drawdown ?? '—'}</span>
                   </div>
                 </div>
               </div>
