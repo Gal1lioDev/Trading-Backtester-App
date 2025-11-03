@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useMemo } from "react";
 import { Switch } from "@/components/ui/switch";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { toast } from "sonner";
@@ -83,26 +84,46 @@ const Trade = () => {
     { date: "2023-01-27", open: 110.80, high: 111.50, low: 110.50, close: 111.20, volume: 1400000 },
   ];
 
-  const equityData = [
-    { date: "2020-01", equity: 10000, price: 95 },
-    { date: "2020-04", equity: 12000, price: 98 },
-    { date: "2020-07", equity: 11500, price: 102 },
-    { date: "2020-10", equity: 14000, price: 108 },
-    { date: "2021-01", equity: 15500, price: 115 },
-    { date: "2021-04", equity: 18000, price: 120 },
-    { date: "2021-07", equity: 20000, price: 125 },
-    { date: "2023-12", equity: 22500, price: 130 },
-  ];
+  // const equityData = [
+  //   { date: "2020-01", equity: 10000, price: 95 },
+  //   { date: "2020-04", equity: 12000, price: 98 },
+  //   { date: "2020-07", equity: 11500, price: 102 },
+  //   { date: "2020-10", equity: 14000, price: 108 },
+  //   { date: "2021-01", equity: 15500, price: 115 },
+  //   { date: "2021-04", equity: 18000, price: 120 },
+  //   { date: "2021-07", equity: 20000, price: 125 },
+  //   { date: "2023-12", equity: 22500, price: 130 },
+  // ];
 
-  const trades = [
-    { date: "2023-01-15", type: "BUY" as const, price: "105.50", pnl: "-", cumulative: "-", color: "text-muted-foreground" },
-    { date: "2023-02-01", type: "SELL" as const, price: "110.25", pnl: "+4.75", cumulative: "+4.75", color: "text-success" },
-    { date: "2023-02-15", type: "BUY" as const, price: "108.00", pnl: "-", cumulative: "+4.75", color: "text-muted-foreground" },
-    { date: "2023-03-01", type: "SELL" as const, price: "113.50", pnl: "+5.50", cumulative: "+10.25", color: "text-success" },
-    { date: "2023-03-20", type: "BUY" as const, price: "115.00", pnl: "-", cumulative: "+10.25", color: "text-muted-foreground" },
-    { date: "2023-04-10", type: "SELL" as const, price: "112.00", pnl: "-3.00", cumulative: "+7.25", color: "text-destructive" },
-  ];
+  // const trades = [
+  //   { date: "2023-01-15", type: "BUY" as const, price: "105.50", pnl: "-", cumulative: "-", color: "text-muted-foreground" },
+  //   { date: "2023-02-01", type: "SELL" as const, price: "110.25", pnl: "+4.75", cumulative: "+4.75", color: "text-success" },
+  //   { date: "2023-02-15", type: "BUY" as const, price: "108.00", pnl: "-", cumulative: "+4.75", color: "text-muted-foreground" },
+  //   { date: "2023-03-01", type: "SELL" as const, price: "113.50", pnl: "+5.50", cumulative: "+10.25", color: "text-success" },
+  //   { date: "2023-03-20", type: "BUY" as const, price: "115.00", pnl: "-", cumulative: "+10.25", color: "text-muted-foreground" },
+  //   { date: "2023-04-10", type: "SELL" as const, price: "112.00", pnl: "-3.00", cumulative: "+7.25", color: "text-destructive" },
+  // ];
+  
+  // ADD THIS BLOCK
+  const chartDataAfterBacktest = useMemo(() => {
+    if (!result || !result.equity_curve) {
+      return [];
+    }
 
+    // Create a lookup map for closing prices from the CSV data
+    const priceMap = new Map(
+      candlestickData.map(d => [d.date, d.close])
+    );
+
+    // Map equity curve from result, and merge price from CSV
+    return result.equity_curve.map((p: any) => ({
+      date: p.date,
+      equity: p.value,
+      price: priceMap.get(p.date) ?? undefined, // Get matching price from CSV data
+    }));
+  }, [result, candlestickData]); // Depend on both result and candlestickData
+  // END ADDED BLOCK
+  
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -142,6 +163,13 @@ const Trade = () => {
     reader.readAsText(file);
   };
 
+  const handleRuleChange = (id: number, field: string, value: string) => {
+    setRules(currentRules =>
+      currentRules.map(rule =>
+        rule.id === id ? { ...rule, [field]: value } : rule
+      )
+    );
+  };
   const handleUseSampleData = () => {
     setCandlestickData(sampleData);
     setDataSource("sample");
@@ -400,8 +428,8 @@ const Trade = () => {
               <div key={rule.id} className="bg-secondary/30 rounded-lg p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-bold">{rule.name}</h3>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="sm"
                     onClick={() => handleDeleteRule(rule.id)}
                   >
@@ -410,21 +438,44 @@ const Trade = () => {
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
                   <span className="text-muted-foreground">WHEN</span>
-                  <Input className="w-32" placeholder="SMA(5)" defaultValue={rule.indicator1} />
-                  <Select defaultValue={rule.condition}>
+                  <Input
+                    className="w-32"
+                    placeholder="SMA(5)"
+                    value={rule.indicator1}
+                    onChange={(e) => handleRuleChange(rule.id, 'indicator1', e.target.value)}
+                  />
+                  <Select
+                    value={rule.condition}
+                    onValueChange={(value) => handleRuleChange(rule.id, 'condition', value)}
+                  >
                     <SelectTrigger className="w-40">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="crosses-above">crosses above</SelectItem>
                       <SelectItem value="crosses-below">crosses below</SelectItem>
+                      {/* Add more conditions here if you want */}
                     </SelectContent>
                   </Select>
-                  <Input className="w-32" placeholder="SMA(20)" defaultValue={rule.indicator2} />
+                  <Input
+                    className="w-32"
+                    placeholder="SMA(20)"
+                    value={rule.indicator2}
+                    onChange={(e) => handleRuleChange(rule.id, 'indicator2', e.target.value)}
+                  />
                   <span className="text-muted-foreground">THEN</span>
-                  <Button className={rule.action === "BUY" ? "btn-trade" : "btn-sell"} size="sm">
-                    {rule.action}
-                  </Button>
+                  <Select
+                    value={rule.action}
+                    onValueChange={(value) => handleRuleChange(rule.id, 'action', value)}
+                  >
+                    <SelectTrigger className={`w-24 ${rule.action === "BUY" ? "btn-trade" : "btn-sell"}`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="BUY">BUY</SelectItem>
+                      <SelectItem value="SELL">SELL</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             ))}
@@ -553,7 +604,7 @@ const Trade = () => {
               <div className="card-glass rounded-xl p-6">
                 <h3 className="text-xl font-bold mb-6">Equity Curve</h3>
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={equityData}>
+                  <LineChart data={chartDataAfterBacktest}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" style={{ fontSize: '10px' }} />
                     <YAxis yAxisId="left" stroke="hsl(var(--muted-foreground))" style={{ fontSize: '10px' }} />
@@ -586,21 +637,42 @@ const Trade = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {trades.map((trade, i) => (
-                      <tr key={i} className="border-b border-border/50">
-                        <td className="py-3 px-4 font-mono text-sm">{trade.date}</td>
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-1 rounded text-xs font-bold ${
-                            trade.type === "BUY" ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive"
-                          }`}>
-                            {trade.type}
-                          </span>
+                    {result && result.trade_log && result.trade_log.length > 0 ? (
+                      result.trade_log.map((trade: any, i: number) => {
+                        const tradeType = (trade.type ?? trade.side ?? 'BUY').toUpperCase();
+                        const pnl = trade['P&L'] ?? trade.pnl ?? 0;
+                        const cumulativePnl = trade['Cumulative P&L'] ?? trade.cumulative ?? 0;
+                        const pnlColor = pnl > 0 ? "text-success" : pnl < 0 ? "text-destructive" : "text-muted-foreground";
+
+                        return (
+                          <tr key={i} className="border-b border-border/50">
+                            <td className="py-3 px-4 font-mono text-sm">{trade.date}</td>
+                            <td className="py-3 px-4">
+                              <span className={`px-2 py-1 rounded text-xs font-bold ${
+                                tradeType === "BUY" ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive"
+                              }`}>
+                                {tradeType}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-mono text-sm">
+                              {(trade.price ?? trade.fill_price ?? 0).toFixed(2)}
+                            </td>
+                            <td className={`py-3 px-4 font-mono text-sm ${pnlColor}`}>
+                              {pnl.toFixed(2)}
+                            </td>
+                            <td className={`py-3 px-4 font-mono text-sm ${pnlColor}`}>
+                              {cumulativePnl.toFixed(2)}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="py-3 px-4 text-center text-muted-foreground">
+                          No trades were executed in this backtest.
                         </td>
-                        <td className="py-3 px-4 font-mono text-sm">{trade.price}</td>
-                        <td className={`py-3 px-4 font-mono text-sm ${trade.color}`}>{trade.pnl}</td>
-                        <td className={`py-3 px-4 font-mono text-sm ${trade.color}`}>{trade.cumulative}</td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>
